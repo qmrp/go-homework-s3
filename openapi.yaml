@@ -306,6 +306,7 @@ components:
         - from
         - to
         - content-type
+        - content
       additionalProperties: false
     P2TUpMsg:
       type: object
