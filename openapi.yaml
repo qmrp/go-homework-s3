@@ -1,0 +1,454 @@
+openapi: 3.0.0
+info:
+  title: Huayi IM
+  version: v1.0.0
+  description: |-
+    # 功能
+        
+    本项目要求开发者实现一个即时聊天系统，支持单聊和基于话题的群聊。
+paths:
+  /healthz:
+    get:
+      operationId: healthz
+      summary: 健康检查
+      description: 返回 200 OK 即表示服务已准备好。
+      security: []
+      responses:
+        200:
+          description: OK
+        400:
+          $ref: "#/components/responses/default"
+        default:
+          $ref: "#/components/responses/default"
+  /api/login:
+    post:
+      operationId: login
+      summary: 用户登录
+      description: |-
+        用户凭借 username 登录，无须密码（为简化项目）。
+        用户正确登录后，应当通过 Set-Cookie 返回登录相关凭证。
+        客户端后续取用 Cookie 对其他接口进行访问。
+        
+        **限制**
+        - 同一时刻同一用户只能在一处登录。发生多处登录时，后登陆客户端会将先登录的挤下线，先登录的客户端的任何请求都应当返回 401.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  $ref: '#/components/schemas/username'
+      responses:
+        200:
+          description: OK - 登录成功
+        400:
+          $ref: "#/components/responses/default"
+        401:
+          $ref: "#/components/responses/Unauthorized"
+        default:
+          $ref: "#/components/responses/default"
+  /api/logout:
+    post:
+      operationId: logout
+      summary: 用户登出
+      description: |-
+        用户登出后,会话应当失效。
+      responses:
+        200: { description: OK }
+        400:
+          $ref: "#/components/responses/default"
+        default:
+          $ref: "#/components/responses/default"
+  /api/users:
+    get:
+      operationId: getUsers
+      summary: 查询用户列表
+      description: 查询用户列表
+      parameters:
+        - in: query
+          required: false
+          name: online
+          schema:
+            type: boolean
+          description: |-
+            - `true`: 筛选在线的 Users
+            - `false` 或不传: 查询所有 Users
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ListResponse"
+                  - type: object
+                    properties:
+                      list:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            username:
+                              $ref: '#/components/schemas/username'
+        400: { $ref: "#/components/responses/default" }
+        default: { $ref: "#/components/responses/default" }
+  /api/topics:
+    get:
+      operationId: getTopics
+      summary: 查询话题列表
+      description: 查询话题列表
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ListResponse"
+                  - type: object
+                    properties:
+                      list:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            topic:
+                              $ref: '#/components/schemas/topic'
+        400: { $ref: "#/components/responses/default" }
+        default: { $ref: "#/components/responses/default" }
+    post:
+      operationId: createTopic
+      summary: 创建话题
+      description: |-
+        显式地创建话题。
+
+        注意：话题可以显式地创建，也可以隐式的创建。详情见后续关于 topic 的接口。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topic:
+                  $ref: '#/components/schemas/topic'
+      responses:
+        200: { description: OK }
+        400:
+          $ref: "#/components/responses/default"
+        default:
+          $ref: "#/components/responses/default"
+  /api/topics/{topic}:
+    delete:
+      operationId: deleteTopic
+      summary: 删除话题
+      description: |-
+        删除话题。
+        
+        注意删除话题的前提是该话题存在，否则返回 404.
+        
+        所有用户都可以删除任何话题。
+        
+        一旦话题被删除，其相关的消息都会被删除，即便此时还有未下发的消息或离线消息。
+        
+        同名话题可以随时被创建回来，但之前被删除的消息不可恢复了。
+      responses:
+        200: { description: OK }
+        400:
+          $ref: "#/components/responses/default"
+        default:
+          $ref: "#/components/responses/default"
+  /api/topics/{topic}/actions/join:
+    post:
+      operationId: joinTopic
+      summary: 显式地加入话题
+      description: |-
+        显式地加入话题。
+        
+        注意加入话题的前提是该话题存在，否则返回 404.
+      responses:
+        200: { description: OK }
+        400:
+          $ref: "#/components/responses/default"
+        default:
+          $ref: "#/components/responses/default"
+  /api/topics/{topic}/actions/quit:
+    post:
+      operationId: quitTopic
+      summary: 退出话题
+      description: |-
+        退出话题。
+        
+        注意退出话题的前提是该话题存在，否则返回 404.
+        
+        无论 User 是否加入了该话题，使用本接口退出该话题都是安全的。
+        也就是说即便用户没有加入该话题，使用本接口退出话题也不会报错。
+      responses:
+        200: { description: OK }
+        400:
+          $ref: "#/components/responses/default"
+        default:
+          $ref: "#/components/responses/default"
+  /api/messages:
+    post:
+      operationId: sendMessage
+      summary: 发送消息
+      description: |-
+         发送消息。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/P2PUpMsg'
+                - $ref: '#/components/schemas/P2TUpMsg'
+      responses:
+        200: { description: OK }
+        400:
+          $ref: "#/components/responses/default"
+        default:
+          $ref: "#/components/responses/default"
+  /api/ws:
+    get:
+      operationId: ws
+      summary: Websocket 握手
+      description: |-
+        Websocket 握手.
+        
+        由于 Websocket 是长连接双工的，用 Openapi 3 文档不便描述，需要用 AsyncAPI
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/Ping'
+                - $ref: '#/components/schemas/Pong'
+                - $ref: '#/components/schemas/Ack'
+                - $ref: '#/components/schemas/P2PDown'
+                - $ref: '#/components/schemas/P2TDown'
+      responses:
+        200: { description: OK }
+        400:
+          $ref: "#/components/responses/default"
+        default:
+          $ref: "#/components/responses/default"
+components:
+  schemas:
+    username:
+      description: 用户名，4-30个字符，只能包含字母、数字、下划线和连字符
+      type: string
+      pattern: "^[a-zA-Z0-9_-]{4,30}$"
+    topic:
+      description: |-
+        话题，4-30个字符，只能包含字母、数字、下划线和连字符。
+        
+        注意：User 加入 topic 是隐式地、自动的。
+        - 当 User 发送关于某 topic 的消息，则视作自动加入了该 topic，后续能收到该 topic 上的消息。
+        - 当 User 在任意 topic 的消息中被提及(其 username 出现在 .to 列表中)，也视作该 User 自动加入了该 topic，后续能收到该 topic 上的消息。
+      type: string
+      pattern: "^[a-zA-Z0-9_-]{4,30}$"
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: 描述错误信息
+    ListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        list:
+          type: array
+      required: [total, list]
+      additionalProperties: false
+    P2PUpMsg:
+      type: object
+      title: 一对一上行消息
+      description: |-
+        上行一对一消息，即客户端发送给服务端的单聊消息。
+        
+        **字段说明**
+        - `from`: 消息的发送者 username
+      properties:
+        message-type:
+          type: string
+          enum:
+            - message
+          description: 消息类别
+        from:
+          $ref: '#/components/schemas/username'
+        to:
+          type: array
+          items:
+            $ref: '#/components/schemas/username'
+          description: |-
+            消息接收者列表。
+            注意此处是列表，表示可以批量发送同一则消息给多人。
+        content-type:
+          type: string
+          enum:
+            - text/plain
+          description: 消息内容格式
+        content:
+          type: string
+          description: 消息内容
+      required:
+        - message-type
+        - from
+        - to
+        - content-type
+      additionalProperties: false
+    P2TUpMsg:
+      type: object
+      title: 群聊上行消息
+      description: |-
+        上行群聊消息，即客户端发送给服务端的群聊消息。
+        与`一对一上行消息`的关键区别在于是否有`topic`.
+        
+        **字段说明**
+        - `from`: 消息的发送者 username
+      properties:
+        message-type:
+          type: string
+          enum:
+            - message
+          description: 消息类别
+        from:
+          $ref: '#/components/schemas/username'
+        to:
+          items:
+            $ref: '#/components/schemas/username'
+          description: |-
+            消息提及者列表。
+            注意此处与`一对一上行消息`不同，此处仅表示在群消息中提及，而不是发送单聊消息，
+            相当于 IM 应用的群聊中用 `@username` 来强调提及某 User。
+        topic:
+          $ref: '#/components/schemas/topic'
+        content-type:
+          type: string
+          enum:
+            - text/plain
+          description: 消息内容格式
+        content:
+          type: string
+          description: 消息内容
+      required:
+        - message-type
+        - from
+        - to
+        - topic
+        - content-type
+        - content
+      additionalProperties: false
+    Ping:
+      title: 上行心跳
+      properties:
+        message-type:
+          type: string
+          enum:
+            - ping
+        message-id:
+          type: integer
+          description: 消息 Id. 只有 ping 和 pong 消息才有 Id.
+        from:
+          $ref: '#/components/schemas/username'
+    Pong:
+      title: 上行心跳
+      properties:
+        message-type:
+          type: string
+          enum:
+            - pong
+        message-id:
+          type: integer
+          description: 消息 Id. 只有 ping 和 pong 消息才有 Id.
+        to:
+          $ref: '#/components/schemas/username'
+    Ack:
+      title: 心跳确认
+      description: |-
+        服务端接收到客户端的 ping 消息应当进行确认。
+        客户端接收到服务端的 pong 消息应当进行确认。
+        此为确认消息的 payload.
+        其 `ack-id` 表示对哪个 ping 或 pong 消息进行确认。
+      properties:
+        message-type:
+          type: string
+          enum:
+            - ack
+        ack-id:
+          type: integer
+          description: |-
+            ping 或 pong 消息的 `message-id` 的回填，表示对哪个 ping 或 pong 消息的确认。
+    P2PDown:
+      title: 一对一单聊下行消息
+      description: |-
+        一对一单聊的下行消息格式。
+      properties:
+        message-type:
+          type: string
+          enum:
+            - message
+        from:
+          $ref: '#/components/schemas/username'
+        to:
+          type: array
+          items:
+            $ref: '#/components/schemas/username'
+          minimum: 1
+          maxItems: 1
+        content-type:
+          type: string
+          enum:
+            - text/plain
+        content:
+          type: string
+          description: 消息内容文本
+    P2TDown:
+      title: 群聊下行消息
+      description: |-
+        群聊的下行消息格式。
+      properties:
+        message-type:
+          type: string
+          enum:
+            - message
+        from:
+          $ref: '#/components/schemas/username'
+        to:
+          type: array
+          items:
+            $ref: '#/components/schemas/username'
+          minimum: 1
+        topic:
+          $ref: '#/components/schemas/topic'
+        content-type:
+          type: string
+          enum:
+            - text/plain
+        content:
+          type: string
+          description: 消息内容文本
+  responses:
+    default:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Unauthorized - 用户未登录
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: "未登录或会话已过期"
