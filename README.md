@@ -84,20 +84,11 @@
 
 ### POST /api/messages - 发送消息
 
-```json
-{
-  "from": "Harry",
-  "to": ["Ron", "Hermione"],
-  "topic": "", # 为空，表示单聊；否则表示发送某个话题；话题不存在则自动创建
-  "content-type": "text/plain",
-  "message-type": "message",
-  "content": "Are you OK ?"
-}
-```
-
 ## WebSocket
 
 ### 握手 GET /api/ws
+
+**具体消息格式以 openapi.yaml 为准**
 
 ### 客户端心跳格式
 
@@ -128,19 +119,6 @@
 {
   "message-type": "ack",
   "ack-id": 11
-}
-```
-
-### 上行消息格式
-
-```go
-{
-  "from": "Harry",
-  "to": ["Ron"],
-  "topic": "", # 为空表示单聊；否则表示某个话题下的群聊
-  "message-type": "message"
-  "content-type": "text/plain"
-  "content": "Are you OK ?"
 }
 ```
 

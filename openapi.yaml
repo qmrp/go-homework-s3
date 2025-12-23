@@ -219,7 +219,8 @@ paths:
       description: |-
         Websocket 握手.
         
-        由于 Websocket 是长连接双工的，用 Openapi 3 文档不便描述，需要用 AsyncAPI
+        由于 Websocket 是长连接双工的，用 Openapi 3 文档不便描述，需要用 AsyncAPI，
+        而 AsyncAPI 比较复杂而我们的需求比较简单，因此本文档采用 requestBody 来描述 Websocket 连接上的各种消息类型。
       requestBody:
         required: false
         content:
