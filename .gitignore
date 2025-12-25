@@ -34,3 +34,5 @@ go.work.sum
 /.idea/go-homework-s3.iml
 /.idea/modules.xml
 /.idea/vcs.xml
+/im-app/.vite/deps/_metadata.json
+/im-app/.vite/deps/package.json

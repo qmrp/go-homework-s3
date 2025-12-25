@@ -4,35 +4,35 @@ info:
   version: v1.0.0
   description: |-
     # 功能
-        
+
     本项目要求开发者实现一个即时聊天系统，支持单聊和基于话题的群聊。
-    
+
     # 接口
-    
+
     开发者需实现一些常规的 RESTful APIs 以及一个 Websocket API。
-    
+
     # 消息
-    
+
     用户向另一个用户发送消息，或者发送关于 topic 的消息，总是通过 HTTP 接口发送。
     服务端向用户推送消息（服务端转发的来自其他用户的消息和系统消息）总是通过 Websocket。
-    
+
     消息体中用 `from` 表示消息的发送者，`to` 表示消息的接收者。
-    
+
     ```json
     {
       "from": "Harry",
       "to": ["Ron", "Hermione"]
     }
     ```
-    
+
     如上示例表示 Harry 将消息发送给 Ron 和 Hermione（这不是群聊，是批量发送）。
-    
+
     服务端接收到来自 Harry 的这则上行消息后，会检查 `to` 列表，然后将消息分别转发给 Ron 和 Hermione。
     当然，这其中还有些检查 Ron 和 Hermione 在线状态等流程不题。
-    
+
     如果消息体中有 `topic` 则一般表示群聊（系统消息也会有 topic 字段但不属于群聊）。
-    
-    
+
+
     ```json
     {
       "from": "Harry",
@@ -40,10 +40,13 @@ info:
       "topic": "philosophers_stone"
     }
     ```
-    
+
     当服务端接收到 Harry 的这则消息，会将消息转发给**所有参与**了 "philosophers_stone" 这个话题的人。
     **注意**，此处不仅仅要将消息转发给 Ron 和 Hermione，而是**所有参与了该 topic 的人**。
     此处的 `to` 字段仅仅表示提及，相当于即时聊天 APP 中用 `@username` 提及某人。
+
+security:
+  - bearerAuth: []
 paths:
   /healthz:
     get:
@@ -64,9 +67,10 @@ paths:
       summary: 用户登录
       description: |-
         用户凭借 username 登录，无须密码（为简化项目）。
-        用户正确登录后，应当通过 Set-Cookie 返回登录相关凭证。
-        客户端后续取用 Cookie 对其他接口进行访问。
-        
+        用户正确登录后，会在响应体中返回 sid。
+        客户端后续使用 Authorization: Bearer <sid> 对其他 HTTP 接口进行访问；
+        WebSocket 握手使用 query 参数 sid（`/api/ws?sid=...`）。
+
         **限制**
         - 同一时刻同一用户只能在一处登录。发生多处登录时，后登陆客户端会将先登录的挤下线，先登录的客户端的任何请求都应当返回 401；如果先登录的客户端与服务端存续 Websocket 连接则需要由服务端主动关闭.
       security: []
@@ -82,6 +86,10 @@ paths:
       responses:
         200:
           description: OK - 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
         400:
           $ref: "#/components/responses/default"
         401:
@@ -183,15 +191,15 @@ paths:
       summary: 删除话题
       description: |-
         删除话题。
-        
+
         注意删除话题的前提是该话题存在，否则返回 404.
-        
+
         所有用户都可以删除任何话题。
-        
+
         一旦话题被删除，其相关的消息都会被删除，即便此时还有未下发的消息或离线消息。
-        
+
         同名话题可以随时被创建回来，但之前被删除的消息不可恢复了。
-        
+
         删除话题会触发系统通知，系统会向话题的所有相关方发送下行消息通知话题已被删除。
       responses:
         200: { description: OK }
@@ -205,7 +213,7 @@ paths:
       summary: 显式地加入话题
       description: |-
         显式地加入话题。
-        
+
         注意加入话题的前提是该话题存在，否则返回 404.
       responses:
         200: { description: OK }
@@ -219,12 +227,12 @@ paths:
       summary: 退出话题
       description: |-
         退出话题。
-        
+
         注意退出话题的前提是该话题存在，否则返回 404.
-        
+
         无论 User 是否加入了该话题，使用本接口退出该话题都是安全的。
         也就是说即便用户没有加入该话题，使用本接口退出话题也不会报错。
-        
+
         用户退出话题后，除非有人再在话题中提及它或它重新加入话题，否则服务端不会再向其推送话题相关的消息了。
       responses:
         200: { description: OK }
@@ -258,9 +266,19 @@ paths:
       summary: Websocket 握手
       description: |-
         Websocket 握手.
-        
+
+        本接口必须通过 query 参数 sid 进行握手鉴权（`/api/ws?sid=...`）。
+
         由于 Websocket 是长连接双工的，用 Openapi 3 文档不便描述，需要用 AsyncAPI，
         而 AsyncAPI 比较复杂而我们的需求比较简单，因此本文档采用 requestBody 来描述 Websocket 连接上的各种消息类型。
+      security: []
+      parameters:
+        - in: query
+          required: true
+          name: sid
+          schema:
+            $ref: '#/components/schemas/sid'
+          description: 登录接口返回的 sid，会话标识
       requestBody:
         required: false
         content:
@@ -281,7 +299,25 @@ paths:
         default:
           $ref: "#/components/responses/default"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: sid
   schemas:
+    sid:
+      description: 会话标识，由登录接口返回；可用于 Authorization: Bearer <sid> 或 WebSocket ?sid=...
+      type: string
+      minLength: 1
+    LoginResponse:
+      type: object
+      properties:
+        sid:
+          $ref: '#/components/schemas/sid'
+        username:
+          $ref: '#/components/schemas/username'
+      required: [sid, username]
+      additionalProperties: false
     username:
       description: 用户名，4-30个字符，只能包含字母、数字、下划线和连字符
       type: string
@@ -289,7 +325,7 @@ components:
     topic:
       description: |-
         话题，4-30个字符，只能包含字母、数字、下划线和连字符。
-        
+
         注意：User 加入 topic 是隐式地、自动的。
         - 当 User 发送关于某 topic 的消息，则视作自动加入了该 topic，后续能收到该 topic 上的消息。
         - 当 User 在任意 topic 的消息中被提及(其 username 出现在 .to 列表中)，也视作该 User 自动加入了该 topic，后续能收到该 topic 上的消息。
@@ -317,7 +353,7 @@ components:
       title: 一对一上行消息
       description: |-
         上行一对一消息，即客户端发送给服务端的单聊消息。
-        
+
         **字段说明**
         - `from`: 消息的发送者 username
       properties:
@@ -356,7 +392,7 @@ components:
       description: |-
         上行群聊消息，即客户端发送给服务端的群聊消息。
         与`一对一上行消息`的关键区别在于是否有`topic`.
-        
+
         **字段说明**
         - `from`: 消息的发送者 username
       properties:

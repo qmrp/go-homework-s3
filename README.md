@@ -203,3 +203,94 @@ Websocket 在网络协议层面已经约定了心跳协议，此处为提高业
 *   测试：至少提供 HTTP 接口的集成测试，鼓励提供 Websocket 集成测试。
     
 *   请提供尽可能简单的脚本或命令让验收者方便验收，如 `make e2e`。
+
+---
+
+## 参考实现（服务端）
+
+本仓库已提供一份可运行的服务端参考实现：
+
+* HTTP 框架：`gin`
+* 配置：`viper`（读取 `config.yaml` 与环境变量）
+* 依赖注入/生命周期：`fx`
+* WebSocket：`nhooyr.io/websocket`
+* 持久化：无（纯内存，进程重启即丢）
+* 鉴权：登录返回 `sid`；HTTP 使用 `Authorization: Bearer <sid>`；WebSocket 使用 `/api/ws?sid=...`
+
+## 前端客户端（im-app）使用指南（给前端小白）
+
+本仓库包含一个纯前端的聊天客户端 `im-app/`（React + TSX + TailwindCSS + shadcn/ui），用于**连接和调试**本 IM 服务端。
+
+### 1) 安装前置环境
+
+* 安装 Node.js（建议 LTS 版本）
+* 安装 `pnpm`（如果未安装）：
+
+```bash
+npm i -g pnpm
+```
+
+### 2) 安装前端依赖
+
+在仓库根目录执行：
+
+```bash
+cd im-app
+pnpm install
+```
+
+### 3) 启动服务端 + 启动前端开发服务
+
+先启动服务端（仓库根目录）：
+
+```bash
+make run
+```
+
+再启动前端（`im-app/` 目录）：
+
+```bash
+pnpm dev
+```
+
+浏览器打开终端输出的地址（默认 `http://localhost:5173`）。
+
+### 4) 多开客户端模拟多用户互聊
+
+你可以多开多个前端实例（不同端口）来模拟多用户在线：
+
+```bash
+pnpm dev --port 5174
+pnpm dev --port 5175
+```
+
+分别在不同端口页面用不同 username 登录，即可互相聊天。
+
+### 5) 用 im-app 调试服务端（推荐检查点）
+
+* **代理与跨域**：开发模式下，前端会把 `/api/*`（包含 WebSocket）代理到 `http://localhost:8080`（见 `im-app/vite.config.ts`），因此不需要服务端额外配置 CORS。
+* **鉴权是否生效**：登录成功后，服务端会返回 `sid`；前端会把 `sid` 存在浏览器 `localStorage` 并在后续请求中带上 `Authorization: Bearer <sid>`。
+* **WebSocket 是否在线**：打开浏览器 DevTools → Network → WS，确认 `GET /api/ws?sid=...` 为 `101 Switching Protocols`，并且连接持续存在。
+* **心跳是否正常**：在 WS 的 Frames 中能看到客户端周期性 `ping`，服务端回 `ack`；以及服务端周期性 `pong`，客户端回 `ack`。
+* **离线消息**：关闭/刷新某个用户页面使其离线，另一用户给他发消息；再重新打开该用户页面，连接建立后应立即收到 10 分钟内的离线消息。
+
+### 运行
+
+```bash
+make run
+```
+
+默认监听 `:8080`，可通过 `config.yaml` 或环境变量覆盖（示例见 `config.example.yaml`）。
+
+### 测试
+
+```bash
+make e2e
+```
+
+### 并发设计概览
+
+* **消息分发**：使用带缓冲队列 + worker pool 的 `Dispatcher` 并发投递到各连接的发送队列；慢消费者会被断开以避免内存无限增长。
+* **连接读写**：每个 WebSocket 连接独立的读 goroutine + 写 goroutine + 心跳 goroutine（服务端 `pong`）+ 空闲检测 goroutine。
+* **在线状态**：基于连接存在与活跃时间；任何 HTTP 请求/WS 上行消息都会 `Touch` 活跃时间。
+* **离线消息**：按用户保存 10 分钟 TTL 的离线队列；建立 WS 连接时立即下发并清空；后台定时清理过期消息。
