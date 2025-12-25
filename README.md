@@ -208,16 +208,14 @@ Websocket 在网络协议层面已经约定了心跳协议，此处为提高业
 
 ## 参考实现（服务端）
 
-本仓库已提供一份可运行的服务端参考实现：
-
 * HTTP 框架：`gin`
 * 配置：`viper`（读取 `config.yaml` 与环境变量）
 * 依赖注入/生命周期：`fx`
 * WebSocket：`nhooyr.io/websocket`
 * 持久化：无（纯内存，进程重启即丢）
-* 鉴权：登录返回 `sid`；HTTP 使用 `Authorization: Bearer <sid>`；WebSocket 使用 `/api/ws?sid=...`
+* 认证：登录返回 `sid`；HTTP 使用 `Authorization: Bearer <sid>`；WebSocket 使用 `/api/ws?sid=...`
 
-## 前端客户端（im-app）使用指南（给前端小白）
+## 前端客户端（im-app）使用指南
 
 本仓库包含一个纯前端的聊天客户端 `im-app/`（React + TSX + TailwindCSS + shadcn/ui），用于**连接和调试**本 IM 服务端。
 
