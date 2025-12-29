@@ -306,7 +306,8 @@ components:
       bearerFormat: sid
   schemas:
     sid:
-      description: 会话标识，由登录接口返回；可用于 Authorization: Bearer <sid> 或 WebSocket ?sid=...
+      description: |-
+        会话标识，由登录接口返回；可用于 Authorization: Bearer sid 或 WebSocket ?sid=...
       type: string
       minLength: 1
     LoginResponse:
