@@ -25,37 +25,23 @@ func NewMessageHandler(userService service.UserService) *MessageHandler {
 	}
 }
 
-// SendMessage 发送消息
-// @Summary 发送消息
-// @Description 发送单聊或群聊消息
-// @Tags 消息模块
-// @Accept json
-// @Produce json
-// @Param Authorization header string true "Bearer session_id"
-// @Param data body model.Message true "消息内容"
-// @Success 200 {object} response.Response
-// @Failure 10001 {object} response.Response "参数无效"
-// @Failure 20001 {object} response.Response "未授权"
-// @Router /api/messages [post]
+/** SendMessage 发送消息
+ * @Summary 发送消息
+ * @Description 发送单聊或群聊消息
+ * @Tags 消息模块
+ * @Accept json
+ * @Produce json
+ * @Param Authorization header string true "Bearer session_id"
+ * @Param data body model.Message true "消息内容"
+ * @Success 200 {object} response.Response
+ * @Failure 10001 {object} response.Response "参数无效"
+ * @Failure 20001 {object} response.Response "未授权"
+ * @Router /api/messages [post]
+ **/
 func (h *MessageHandler) SendMessage(c *gin.Context) {
-	// 1. 从请求头获取session ID
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		response.AbortError(c, errno.Unauthorized.WithMsg("missing authorization header"))
-		return
-	}
-
-	// 2. 简单处理：Bearer session_id
-	sessionID := authHeader[7:]
-	if sessionID == "" {
-		response.AbortError(c, errno.Unauthorized.WithMsg("invalid authorization header"))
-		return
-	}
-
-	// 3. 验证session并获取用户名
-	username, exists := h.userService.GetUsernameBySessionID(sessionID)
+	username, exists := c.Get("username")
 	if !exists {
-		response.AbortError(c, errno.Unauthorized.WithMsg("invalid session"))
+		response.AbortError(c, errno.Unauthorized.WithMsg("missing username"))
 		return
 	}
 
@@ -67,7 +53,7 @@ func (h *MessageHandler) SendMessage(c *gin.Context) {
 	}
 
 	// 5. 设置发送者和创建时间
-	msg.From = username
+	msg.From = username.(string)
 	msg.CreatedAt = time.Now()
 	msg.MessageType = "message"
 	if msg.Topic != "" {

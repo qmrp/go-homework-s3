@@ -32,7 +32,7 @@ func (mm *MessageManager) RegisterConnection(username string, conn *websocket.Co
 	mm.connMutex.Lock()
 	mm.connections[username] = conn
 	mm.connMutex.Unlock()
-	
+
 	// 推送离线消息
 	mm.pushOfflineMessages(username, conn)
 }
@@ -40,6 +40,11 @@ func (mm *MessageManager) RegisterConnection(username string, conn *websocket.Co
 // UnregisterConnection 注销连接
 func (mm *MessageManager) UnregisterConnection(username string) {
 	mm.connMutex.Lock()
+	conn := mm.connections[username]
+	if conn != nil {
+		// 关闭连接
+		conn.Close()
+	}
 	delete(mm.connections, username)
 	mm.connMutex.Unlock()
 }
@@ -50,12 +55,12 @@ func (mm *MessageManager) SendMessage(msg *Message) error {
 	if msg.Topic == "" && len(msg.To) > 0 {
 		return mm.sendPrivateMessage(msg)
 	}
-	
+
 	// 群聊消息
 	if msg.Topic != "" {
 		return mm.sendTopicMessage(msg)
 	}
-	
+
 	return nil
 }
 
@@ -66,7 +71,7 @@ func (mm *MessageManager) sendPrivateMessage(msg *Message) error {
 		mm.connMutex.RLock()
 		conn, exists := mm.connections[recipient]
 		mm.connMutex.RUnlock()
-		
+
 		if exists {
 			// 在线，直接发送
 			if err := conn.WriteJSON(msg); err != nil {
@@ -79,7 +84,7 @@ func (mm *MessageManager) sendPrivateMessage(msg *Message) error {
 			mm.saveOfflineMessage(recipient, msg)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -94,17 +99,17 @@ func (mm *MessageManager) sendTopicMessage(msg *Message) error {
 		mm.topicManager.AddUserToTopic(msg.Topic, msg.From)
 		users = []string{msg.From}
 	}
-	
+
 	for _, user := range users {
 		if user == msg.From {
 			continue // 跳过发送者自己
 		}
-		
+
 		// 检查用户是否在线
 		mm.connMutex.RLock()
 		conn, exists := mm.connections[user]
 		mm.connMutex.RUnlock()
-		
+
 		if exists {
 			// 在线，直接发送
 			if err := conn.WriteJSON(msg); err != nil {
@@ -117,7 +122,7 @@ func (mm *MessageManager) sendTopicMessage(msg *Message) error {
 			mm.saveOfflineMessage(user, msg)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -125,18 +130,18 @@ func (mm *MessageManager) sendTopicMessage(msg *Message) error {
 func (mm *MessageManager) saveOfflineMessage(username string, msg *Message) {
 	mm.mutex.Lock()
 	defer mm.mutex.Unlock()
-	
+
 	// 创建离线消息
 	offlineMsg := &OfflineMessage{
 		UserID:    username,
 		Message:   msg,
 		ExpiresAt: time.Now().Add(10 * time.Minute), // 10分钟过期
 	}
-	
+
 	// 保存到用户的离线消息列表
 	mm.offlineMessages[username] = append(mm.offlineMessages[username], offlineMsg)
 	logger.Info("保存离线消息:", zap.String("to", username), zap.String("from", msg.From))
-	
+
 	// 清理过期离线消息
 	mm.cleanupExpiredMessages()
 }
@@ -149,17 +154,17 @@ func (mm *MessageManager) pushOfflineMessages(username string, conn *websocket.C
 		mm.mutex.Unlock()
 		return
 	}
-	
+
 	// 清空离线消息列表
 	delete(mm.offlineMessages, username)
 	mm.mutex.Unlock()
-	
+
 	// 推送所有离线消息
 	for _, offlineMsg := range messages {
 		if time.Now().After(offlineMsg.ExpiresAt) {
 			continue // 跳过过期消息
 		}
-		
+
 		if err := conn.WriteJSON(offlineMsg.Message); err != nil {
 			logger.Error("推送离线消息失败:", zap.Error(err), zap.String("to", username))
 			continue
@@ -171,7 +176,7 @@ func (mm *MessageManager) pushOfflineMessages(username string, conn *websocket.C
 // cleanupExpiredMessages 清理过期离线消息
 func (mm *MessageManager) cleanupExpiredMessages() {
 	now := time.Now()
-	
+
 	for username, messages := range mm.offlineMessages {
 		var validMessages []*OfflineMessage
 		for _, msg := range messages {
@@ -179,7 +184,7 @@ func (mm *MessageManager) cleanupExpiredMessages() {
 				validMessages = append(validMessages, msg)
 			}
 		}
-		
+
 		if len(validMessages) == 0 {
 			delete(mm.offlineMessages, username)
 		} else {
@@ -199,7 +204,7 @@ func (mm *MessageManager) CleanupExpiredMessages() {
 func (mm *MessageManager) GetConnection(username string) (*websocket.Conn, bool) {
 	mm.connMutex.RLock()
 	defer mm.connMutex.RUnlock()
-	
+
 	conn, exists := mm.connections[username]
 	return conn, exists
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/api/response"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/model"
 )
 
@@ -14,7 +15,8 @@ type UserService interface {
 	Login(ctx context.Context, username string) (string, error) // 返回session ID
 	Logout(ctx context.Context, username string) error
 	SetOnlineStatus(ctx context.Context, username string, online bool) error
-	GetOnlineUsers(ctx context.Context) ([]*model.User, error)
+	GetOnlineUsers(ctx context.Context) (response.UserListResponse, error)
+	GetAllUsers(ctx context.Context) (response.UserListResponse, error)
 	GetUsernameBySessionID(sessionID string) (string, bool)
 	SetNonResponseCount(ctx context.Context, username string, count int) error
 	SetLastAckId(ctx context.Context, username string, ackID int64) error

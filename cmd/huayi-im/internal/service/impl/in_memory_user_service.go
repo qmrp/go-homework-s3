@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/api/response"
+	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/manager"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/model"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/service"
 )
@@ -121,7 +123,7 @@ func (s *InMemoryUserService) Logout(ctx context.Context, username string) error
 			delete(s.sessions, sessionID)
 		}
 	}
-
+	manager.MessageManager.UnregisterConnection(username)
 	return nil
 }
 
@@ -144,18 +146,36 @@ func (s *InMemoryUserService) SetOnlineStatus(ctx context.Context, username stri
 }
 
 // GetOnlineUsers 获取所有在线用户
-func (s *InMemoryUserService) GetOnlineUsers(ctx context.Context) ([]*model.User, error) {
+func (s *InMemoryUserService) GetOnlineUsers(ctx context.Context) (response.UserListResponse, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	var onlineUsers []*model.User
-	for _, user := range s.users {
+	var onlineUsers []string
+	for username, user := range s.users {
 		if user.Online {
-			onlineUsers = append(onlineUsers, user)
+			onlineUsers = append(onlineUsers, username)
 		}
 	}
 
-	return onlineUsers, nil
+	return response.UserListResponse{
+		List:  onlineUsers,
+		Total: len(onlineUsers),
+	}, nil
+}
+
+func (s *InMemoryUserService) GetAllUsers(ctx context.Context) (response.UserListResponse, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	var allUsers []string
+	for username := range s.users {
+		allUsers = append(allUsers, username)
+	}
+
+	return response.UserListResponse{
+		List:  allUsers,
+		Total: len(allUsers),
+	}, nil
 }
 
 func (s *InMemoryUserService) GetUsernameBySessionID(sessionID string) (string, bool) {

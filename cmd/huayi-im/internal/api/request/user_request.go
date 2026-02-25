@@ -2,7 +2,7 @@ package request
 
 // GetUserReq 获取用户请求（路径参数）
 type GetUserReq struct {
-	UserID uint64 `uri:"user_id" binding:"required,min=1"`
+	Username string `uri:"username" binding:"required,min=3,max=50"`
 }
 
 // LoginReq 登录请求

@@ -63,7 +63,7 @@ func NewWSHandler(userService service.UserService) func(c *gin.Context) {
 		go func() {
 			defer close(done)
 			for {
-				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+				conn.SetReadDeadline(time.Now().Add(65 * time.Second))
 				messageType, message, err := conn.ReadMessage()
 
 				if err != nil {
@@ -148,15 +148,15 @@ func NewWSHandler(userService service.UserService) func(c *gin.Context) {
 					logger.Error("获取用户失败:", zap.Error(err), zap.String("username", username))
 					return
 				}
-				if user.NonResponseCount > 3 {
+				userService.SetNonResponseCount(c, username, user.NonResponseCount+1)
+				userService.SetLastAckId(c, username, pongMsg.MessageID)
+				if user.NonResponseCount >= 3 {
 					logger.Error("用户无响应次数超过3次，已被标记为非在线状态", zap.String("username", username))
 					userService.SetOnlineStatus(c, username, false)
 					userService.SetNonResponseCount(c, username, 0)
 					conn.Close()
 					return
 				}
-				userService.SetNonResponseCount(c, username, user.NonResponseCount+1)
-				userService.SetLastAckId(c, username, pongMsg.MessageID)
 			}
 		}
 	}

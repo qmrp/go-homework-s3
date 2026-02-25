@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/api/request"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/api/response"
-	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/model"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/pkg/errno"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/service"
 )
@@ -21,17 +20,18 @@ func NewUserHandler(s service.UserService) *UserHandler {
 	return &UserHandler{userService: s}
 }
 
-// GetUserByID 获取用户详情
-// @Summary 获取用户详情
-// @Description 根据用户ID查询用户信息
-// @Tags 用户模块
-// @Accept json
-// @Produce json
-// @Param user_id path uint64 true "用户ID"
-// @Success 200 {object} response.Response{data=model.User}
-// @Failure 10001 {object} response.Response "参数无效"
-// @Failure 20001 {object} response.Response "用户不存在"
-// @Router /api/v1/users/{user_id} [get]
+/** GetUserByID 获取用户详情
+ * @Summary 获取用户详情
+ * @Description 根据用户ID查询用户信息
+ * @Tags 用户模块
+ * @Accept json
+ * @Produce json
+ * @Param user_id path uint64 true "用户ID"
+ * @Success 200 {object} response.Response{data=model.User}
+ * @Failure 10001 {object} response.Response "参数无效"
+ * @Failure 20001 {object} response.Response "用户不存在"
+ * @Router /api/v1/users/{user_id} [get]
+ **/
 func (h *UserHandler) GetUserByID(c *gin.Context) {
 	// 1. 绑定路径参数
 	var req request.GetUserReq
@@ -41,7 +41,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	}
 
 	// 2. 调用业务层
-	user, err := h.userService.GetByID(context.Background(), req.UserID)
+	user, err := h.userService.GetByUsername(context.Background(), req.Username)
 	if err != nil {
 		response.AbortError(c, errno.UserNotFound.WithMsg(err.Error()))
 		return
@@ -51,17 +51,18 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	response.Success(c, user)
 }
 
-// Login 登录
-// @Summary 用户登录
-// @Description 用户登录获取session ID
-// @Tags 用户模块
-// @Accept json
-// @Produce json
-// @Param data body request.LoginReq true "登录信息"
-// @Success 200 {object} response.Response{data=map[string]string}
-// @Failure 10001 {object} response.Response "参数无效"
-// @Failure 20001 {object} response.Response "用户名或密码错误"
-// @Router /api/login [post]
+/** Login 登录
+ * @Summary 用户登录
+ * @Description 用户登录获取session ID
+ * @Tags 用户模块
+ * @Accept json
+ * @Produce json
+ * @Param data body request.LoginReq true "登录信息"
+ * @Success 200 {object} response.Response{data=map[string]string}
+ * @Failure 10001 {object} response.Response "参数无效"
+ * @Failure 20001 {object} response.Response "用户名或密码错误"
+ * @Router /api/login [post]
+ **/
 func (h *UserHandler) Login(c *gin.Context) {
 	// 1. 绑定并校验参数
 	var req request.LoginReq
@@ -84,17 +85,18 @@ func (h *UserHandler) Login(c *gin.Context) {
 	})
 }
 
-// Logout 登出
-// @Summary 用户登出
-// @Description 用户登出，清除session
-// @Tags 用户模块
-// @Accept json
-// @Produce json
-// @Param Authorization header string true "Bearer session_id"
-// @Success 200 {object} response.Response
-// @Failure 10001 {object} response.Response "参数无效"
-// @Failure 20001 {object} response.Response "未授权"
-// @Router /api/logout [post]
+/** Logout 登出
+ * @Summary 用户登出
+ * @Description 用户登出，清除session
+ * @Tags 用户模块
+ * @Accept json
+ * @Produce json
+ * @Param Authorization header string true "Bearer session_id"
+ * @Success 200 {object} response.Response
+ * @Failure 10001 {object} response.Response "参数无效"
+ * @Failure 20001 {object} response.Response "未授权"
+ * @Router /api/logout [post]
+ **/
 func (h *UserHandler) Logout(c *gin.Context) {
 	// 1. 从请求头获取session ID
 	authHeader := c.GetHeader("Authorization")
@@ -113,8 +115,11 @@ func (h *UserHandler) Logout(c *gin.Context) {
 	// 3. 调用业务层登出
 	// 注意：这里需要从session中获取用户名，后续需要完善session管理
 	// 暂时简化处理，假设用户名在session中可以直接获取
-	// TODO: 完善session管理，从session中获取用户名
-	username := "test" // 临时占位
+	username, exists := h.userService.GetUsernameBySessionID(sessionID)
+	if !exists {
+		response.AbortError(c, errno.Unauthorized.WithMsg("invalid session"))
+		return
+	}
 	err := h.userService.Logout(context.Background(), username)
 	if err != nil {
 		response.AbortError(c, errno.ServerError.WithMsg(err.Error()))
@@ -140,15 +145,14 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 	online := c.Query("online")
 
 	// 2. 调用业务层
-	var users []*model.User
+	var users response.UserListResponse
 	var err error
 
 	if online == "true" {
 		// 获取在线用户
 		users, err = h.userService.GetOnlineUsers(context.Background())
 	} else {
-		// TODO: 获取所有用户，需要添加GetAllUsers方法
-		users = []*model.User{}
+		users, err = h.userService.GetAllUsers(context.Background())
 	}
 
 	if err != nil {

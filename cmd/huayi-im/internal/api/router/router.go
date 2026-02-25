@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/api/handler"
+	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/pkg/middleware"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/service/impl"
 	"gorm.io/gorm"
 )
@@ -33,10 +34,10 @@ func Register(r *gin.Engine, dbInstance *gorm.DB) {
 		api.POST("/logout", userHandler.Logout) // 登出
 
 		// 消息模块路由
-		api.POST("/messages", messageHandler.SendMessage) // 发送消息
+		api.POST("/messages", middleware.TokenMiddleware(userService), messageHandler.SendMessage) // 发送消息
 
 		// 话题模块路由
-		topicGroup := api.Group("/topics")
+		topicGroup := api.Group("/topics", middleware.TokenMiddleware(userService))
 		{
 			topicGroup.GET("", topicHandler.GetTopics)                      // 获取topic列表
 			topicGroup.POST("", topicHandler.CreateTopic)                   // 创建topic
@@ -46,7 +47,7 @@ func Register(r *gin.Engine, dbInstance *gorm.DB) {
 		}
 
 		// 用户模块路由
-		userGroup := api.Group("/users")
+		userGroup := api.Group("/users", middleware.TokenMiddleware(userService))
 		{
 			userGroup.GET("", userHandler.GetUsers)             // 查询用户列表
 			userGroup.GET("/:user_id", userHandler.GetUserByID) // 获取用户详情
