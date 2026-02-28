@@ -1,10 +1,11 @@
-package service
+package sdk
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -25,7 +26,7 @@ type SDK interface {
 type UserClient interface {
 	SDK
 
-	Login() (UserClient, error)
+	Login(username string) (response.UserDetailResponse, error)
 	Logout() error
 	User() UserAPI
 	Topic() TopicAPI
@@ -44,11 +45,12 @@ type TopicAPI interface {
 	JoinTopic(topicName string) error
 	LeaveTopic(topicName string) error
 	DeleteTopic(topicName string) error
+	GetTopics() (response.TopicListResponse, error)
 }
 
 type MessageAPI interface {
 	// SendMessage 发送消息到指定主题
-	SendMessage(topicName string, message string) error
+	SendMessage(message string, topicName *string, to *[]string) error
 }
 
 var once sync.Once
@@ -82,6 +84,7 @@ func GetSDK() SDK {
 type sdk struct {
 	baseURL *url.URL
 	client  *http.Client
+	name    string
 	token   string
 }
 
@@ -89,26 +92,27 @@ func (s *sdk) Guest() UserClient {
 	return &sdk{
 		baseURL: s.baseURL,
 		client:  new(http.Client),
+		name:    "guest",
 		token:   "",
 	}
 }
 
-func (s *sdk) setWithToken(token string) UserClient {
-	return &sdk{
-		baseURL: s.baseURL,
-		client:  new(http.Client),
-		token:   token,
-	}
+func (s *sdk) setWithToken(token string, username string) UserClient {
+	s.token = token
+	s.name = username
+	return s
 }
 
-func (s *sdk) Login() (UserClient, error) {
-	resp, err := doRequest[string](s, http.MethodPost, "/api/login", nil)
+func (s *sdk) Login(username string) (response.UserDetailResponse, error) {
+	resp, err := doRequest[response.UserDetailResponse](s, http.MethodPost, "/api/login", map[string]string{
+		"username": username,
+	}) //{"sid":"Zhou_1770282010201069000","username":"Zhou"}
 	if err != nil {
-		return nil, err
+		return response.UserDetailResponse{}, err
 	}
-	var sessionID string
-	json.Unmarshal([]byte(*resp), &sessionID)
-	return s.setWithToken(sessionID), nil
+	log.Printf("loginResp: %v", *resp)
+	s.setWithToken(resp.Sid, resp.Username)
+	return *resp, nil
 }
 
 func (s *sdk) Logout() error {
@@ -158,23 +162,33 @@ func (s *sdk) Topic() TopicAPI {
 }
 
 func (t *topicAPI) CreateTopic(topicName string) error {
-	_, err := doRequest[struct{}](t.sdk, http.MethodPost, fmt.Sprintf("/api/topics/%s", topicName), nil)
+	_, err := doRequest[struct{}](t.sdk, http.MethodPost, "/api/topics", map[string]string{
+		"topic": topicName,
+	})
 	return err
 }
 
 func (t *topicAPI) JoinTopic(topicName string) error {
-	_, err := doRequest[struct{}](t.sdk, http.MethodPost, fmt.Sprintf("/api/topics/%s/join", topicName), nil)
+	_, err := doRequest[struct{}](t.sdk, http.MethodPost, fmt.Sprintf("/api/topics/%s/actions/join", topicName), nil)
 	return err
 }
 
 func (t *topicAPI) LeaveTopic(topicName string) error {
-	_, err := doRequest[struct{}](t.sdk, http.MethodPost, fmt.Sprintf("/api/topics/%s/leave", topicName), nil)
+	_, err := doRequest[struct{}](t.sdk, http.MethodPost, fmt.Sprintf("/api/topics/%s/actions/quit", topicName), nil)
 	return err
 }
 
 func (t *topicAPI) DeleteTopic(topicName string) error {
 	_, err := doRequest[struct{}](t.sdk, http.MethodDelete, fmt.Sprintf("/api/topics/%s", topicName), nil)
 	return err
+}
+
+func (t *topicAPI) GetTopics() (response.TopicListResponse, error) {
+	list, err := doRequest[response.TopicListResponse](t.sdk, http.MethodGet, "/api/topics", nil)
+	if err != nil {
+		return response.TopicListResponse{}, err
+	}
+	return *list, nil
 }
 
 type messageAPI struct {
@@ -187,10 +201,23 @@ func (s *sdk) Message() MessageAPI {
 	}
 }
 
-func (m *messageAPI) SendMessage(topicName string, message string) error {
-	_, err := doRequest[struct{}](m.sdk, http.MethodPost, fmt.Sprintf("/api/topics/%s/messages", topicName), map[string]string{
-		"message": message,
-	})
+func (m *messageAPI) SendMessage(message string, topicName *string, to *[]string) error {
+	if to == nil && topicName == nil {
+		return errors.New("to or topic name must be specified")
+	}
+
+	msg := map[string]any{
+		"message-type": "message",
+		"from":         m.sdk.name,
+		"content":      message,
+		"to":           *to,
+	}
+
+	if topicName != nil {
+		msg["topic"] = *topicName
+	}
+
+	_, err := doRequest[struct{}](m.sdk, http.MethodPost, "/api/messages", msg)
 	return err
 }
 

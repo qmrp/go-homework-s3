@@ -35,9 +35,15 @@ func NewTopicHandler(userService service.UserService) *TopicHandler {
 func (h *TopicHandler) GetTopics(c *gin.Context) {
 	// 1. 获取所有话题
 	topics := manager.TopicManager.GetAllTopics()
-
+	topicResponses := make([]response.TopicResponse, 0, len(topics))
+	for _, topic := range topics {
+		topicResponses = append(topicResponses, response.TopicResponse{Topic: topic.Name})
+	}
+	var topicListResponse response.TopicListResponse
+	topicListResponse.List = topicResponses
+	topicListResponse.Total = len(topicResponses)
 	// 2. 返回响应
-	response.Success(c, topics)
+	response.Success(c, topicListResponse)
 }
 
 /** CreateTopic 创建话题

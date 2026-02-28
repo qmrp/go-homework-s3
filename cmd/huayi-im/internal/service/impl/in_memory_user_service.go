@@ -150,10 +150,10 @@ func (s *InMemoryUserService) GetOnlineUsers(ctx context.Context) (response.User
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	var onlineUsers []string
+	var onlineUsers []response.UserResponse
 	for username, user := range s.users {
 		if user.Online {
-			onlineUsers = append(onlineUsers, username)
+			onlineUsers = append(onlineUsers, response.UserResponse{Username: username})
 		}
 	}
 
@@ -167,9 +167,9 @@ func (s *InMemoryUserService) GetAllUsers(ctx context.Context) (response.UserLis
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	var allUsers []string
+	var allUsers []response.UserResponse
 	for username := range s.users {
-		allUsers = append(allUsers, username)
+		allUsers = append(allUsers, response.UserResponse{Username: username})
 	}
 
 	return response.UserListResponse{

@@ -50,7 +50,7 @@ func NewWSHandler(userService service.UserService) func(c *gin.Context) {
 		defer conn.Close()
 		logger.Info("WebSocket 连接成功", zap.String("username", username), zap.String("sid", sid))
 
-		// 注册连接到消息管理器
+		// 注册连接到消息管理器并接收离线消息
 		manager.MessageManager.RegisterConnection(username, conn)
 		defer func() {
 			// 注销连接
@@ -119,6 +119,7 @@ func NewWSHandler(userService service.UserService) func(c *gin.Context) {
 						if err := manager.MessageManager.SendMessage(msg); err != nil {
 							logger.Error("发送消息失败:", zap.Error(err), zap.String("from", wsMsg.From))
 						}
+						userService.SetNonResponseCount(c, username, 0)
 					}
 				}
 			}

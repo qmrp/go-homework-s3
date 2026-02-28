@@ -1,0 +1,19 @@
+version: '1.0'
+
+services:
+  im-server:
+    build: .
+    container_name: huayi-im-server
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./cmd/huayi-im/configs:/app/configs
+    environment:
+      - GIN_MODE=release
+    restart: unless-stopped
+    networks:
+      - im-network
+
+networks:
+  im-network:
+    driver: bridge

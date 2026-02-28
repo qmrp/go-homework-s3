@@ -19,8 +19,8 @@ var (
 	ParamInvalid = &errno{code: 400, message: "参数无效"}
 	ServerError  = &errno{code: 500, message: "服务器内部错误"}
 	UserNotFound = &errno{code: 404, message: "用户不存在"}
-	UserExists   = &errno{code: 20002, message: "用户已存在"}
-	Unauthorized = &errno{code: 40001, message: "未授权"}
+	UserExists   = &errno{code: 400, message: "用户已存在"}
+	Unauthorized = &errno{code: 401, message: "未授权"}
 	NotFound     = &errno{code: 404, message: "资源不存在"}
 )
 

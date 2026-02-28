@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/api/router"
 	"github.com/qmrp/go-homework-s3/cmd/huayi-im/internal/config"
@@ -30,7 +32,19 @@ func main() {
 	router.Register(r, nil)
 	logger.Info("路由注册成功")
 
-	// 6. 启动服务
+	// 6. 启动定时清理过期消息
+	go func() {
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			logger.Info("开始清理过期消息")
+			manager.MessageManager.CleanupExpiredMessages()
+			logger.Info("过期消息清理完成")
+		}
+	}()
+
+	// 7. 启动服务
 	logger.Info("服务启动中，监听地址：", logger.Field("addr", cfg.Server.Addr))
 	if err := r.Run(cfg.Server.Addr); err != nil {
 		logger.Fatal("服务启动失败", logger.Field("error", err))
